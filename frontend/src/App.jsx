@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Cloud, Sun, Map, Wind, Droplets, Thermometer, TrendingUp, MapPin, Calendar, Sparkles, Download, AlertTriangle, Zap, Eye, CloudRain, Activity, Target, BarChart3, Globe, ArrowRight, X, Star, Compass, Mountain, Waves, Gauge, Shield, Brain, Search, Navigation, Database } from 'lucide-react';
+import { Cloud, Sun, Map, Wind, Droplets, Thermometer, TrendingUp, MapPin, Calendar, Sparkles, Download, AlertTriangle, Zap, Eye, CloudRain, Activity, Target, BarChart3, Globe, ArrowRight, X, Star, Compass, Mountain, Waves, Gauge, Shield, Brain, Search, Navigation, Database, Bell } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -34,6 +34,12 @@ const WeatherWise = () => {
   const [mapLoading, setMapLoading] = useState(false);
   const [searchingPlaces, setSearchingPlaces] = useState(false);
   const [hasSearchedPlaces, setHasSearchedPlaces] = useState(false);
+
+  // Alert states
+  const [alerts, setAlerts] = useState([]);
+  const [alertCount, setAlertCount] = useState(0);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+  const [showAlerts, setShowAlerts] = useState(false);
 
   // NEW: Performance monitoring states
   const [searchStats, setSearchStats] = useState(null);
@@ -78,6 +84,280 @@ const WeatherWise = () => {
   useEffect(() => {
     fetchSearchEngineStats();
   }, []);
+
+  // Alert-related functions
+  const fetchGovernmentAlerts = async (locationName = '', lat = null, lon = null) => {
+    setLoadingAlerts(true);
+    try {
+      let realAlerts = [];
+
+      // Try OpenWeatherMap first (most reliable)
+      if (lat && lon) {
+        realAlerts = await fetchOpenWeatherAlerts(lat, lon);
+      }
+
+      // If no real alerts, fall back to mock data
+      if (realAlerts.length === 0) {
+        console.log('Using mock alerts data');
+        realAlerts = generateMockAlerts(locationName);
+      } else {
+        console.log('Using real weather alerts:', realAlerts.length);
+      }
+
+      setAlerts(realAlerts);
+      setAlertCount(realAlerts.filter(alert => !alert.read).length);
+    } catch (error) {
+      console.error('Error fetching alerts:', error);
+      // Fallback to mock data
+      const mockAlerts = generateMockAlerts(locationName);
+      setAlerts(mockAlerts);
+      setAlertCount(mockAlerts.filter(alert => !alert.read).length);
+    } finally {
+      setLoadingAlerts(false);
+    }
+  };
+
+  // Real OpenWeatherMap API integration
+  const fetchOpenWeatherAlerts = async (lat, lon) => {
+    try {
+      // Replace with your actual API key
+      const API_KEY = 'your_openweather_api_key_here';
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly&appid=${API_KEY}`
+      );
+
+      if (!response.ok) {
+        throw new Error('OpenWeatherMap API failed');
+      }
+
+      const data = await response.json();
+
+      if (data.alerts && data.alerts.length > 0) {
+        return data.alerts.map(alert => ({
+          id: `owm-${alert.start}-${alert.end}`,
+          type: getAlertTypeFromEvent(alert.event),
+          severity: getSeverityFromDescription(alert.description),
+          title: alert.event,
+          message: alert.description,
+          location: alert.tags?.[0] || 'Current Location',
+          source: 'OpenWeatherMap',
+          timestamp: new Date(alert.start * 1000),
+          read: false,
+          official: true,
+          dataSource: 'openweather'
+        }));
+      }
+
+      return [];
+    } catch (error) {
+      console.error('OpenWeatherMap API error:', error);
+      return [];
+    }
+  };
+
+  // Helper functions to map API data to our format
+  const getAlertTypeFromEvent = (event) => {
+    const eventLower = event.toLowerCase();
+    if (eventLower.includes('rain') || eventLower.includes('storm') || eventLower.includes('flood')) {
+      return 'weather';
+    } else if (eventLower.includes('wind') || eventLower.includes('cyclone') || eventLower.includes('hurricane')) {
+      return 'cyclone';
+    } else if (eventLower.includes('heat') || eventLower.includes('cold') || eventLower.includes('temperature')) {
+      return 'weather';
+    } else if (eventLower.includes('earthquake') || eventLower.includes('landslide') || eventLower.includes('tsunami')) {
+      return 'disaster';
+    }
+    return 'info';
+  };
+
+  const getSeverityFromDescription = (description) => {
+    const descLower = description.toLowerCase();
+    if (descLower.includes('extreme') || descLower.includes('severe') || descLower.includes('emergency')) {
+      return 'high';
+    } else if (descLower.includes('moderate') || descLower.includes('advisory')) {
+      return 'medium';
+    }
+    return 'low';
+  };
+
+  const generateMockAlerts = (locationName = '') => {
+    const currentDate = new Date();
+    const alerts = [];
+
+    // Kerala specific alerts
+    if (locationName && locationName.toLowerCase().includes('kerala')) {
+      alerts.push({
+        id: 1,
+        type: 'weather',
+        severity: 'high',
+        title: 'Heavy Rainfall Warning',
+        message: 'India Meteorological Department issues heavy rainfall alert for Kerala districts. Expected rainfall: 200-300mm in next 24 hours.',
+        location: 'Kerala',
+        source: 'IMD Kerala',
+        timestamp: new Date(currentDate.getTime() - 30 * 60000), // 30 minutes ago
+        read: false,
+        official: true,
+        dataSource: 'imd'
+      });
+
+      alerts.push({
+        id: 2,
+        type: 'disaster',
+        severity: 'medium',
+        title: 'Landslide Alert',
+        message: 'KSNDMC alerts for possible landslides in hilly areas of Idukki and Wayanad districts.',
+        location: 'Kerala - Idukki, Wayanad',
+        source: 'KSNDMC',
+        timestamp: new Date(currentDate.getTime() - 2 * 60 * 60000), // 2 hours ago
+        read: false,
+        official: true,
+        dataSource: 'ksndmc'
+      });
+    }
+
+    // General India alerts
+    alerts.push({
+      id: 3,
+      type: 'cyclone',
+      severity: 'high',
+      title: 'Cyclone Watch',
+      message: 'Cyclonic circulation observed over Bay of Bengal. Coastal areas advised to stay alert.',
+      location: 'East Coast India',
+      source: 'IMD',
+      timestamp: new Date(currentDate.getTime() - 4 * 60 * 60000), // 4 hours ago
+      read: false,
+      official: true,
+      dataSource: 'imd'
+    });
+
+    // Location-specific alerts
+    if (locationName) {
+      alerts.push({
+        id: 4,
+        type: 'weather',
+        severity: 'medium',
+        title: 'Temperature Alert',
+        message: `High temperature expected in ${locationName}. Stay hydrated and avoid direct sunlight during peak hours.`,
+        location: locationName,
+        source: 'WeatherWise Pro',
+        timestamp: new Date(currentDate.getTime() - 1 * 60 * 60000), // 1 hour ago
+        read: false,
+        official: false,
+        dataSource: 'system'
+      });
+    }
+
+    // Add some read alerts for demonstration
+    alerts.push({
+      id: 5,
+      type: 'info',
+      severity: 'low',
+      title: 'Monsoon Update',
+      message: 'Southwest monsoon advancing normally across Kerala coast.',
+      location: 'Kerala Coast',
+      source: 'IMD',
+      timestamp: new Date(currentDate.getTime() - 24 * 60 * 60000), // 24 hours ago
+      read: true,
+      official: true,
+      dataSource: 'imd'
+    });
+
+    return alerts;
+  };
+
+  const getRelativeTime = (timestamp) => {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - timestamp) / 1000);
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    const diffInDays = Math.floor(diffInHours / 24);
+
+    if (diffInSeconds < 60) {
+      return 'Just now';
+    } else if (diffInMinutes < 60) {
+      return `${diffInMinutes} min ago`;
+    } else if (diffInHours < 24) {
+      return `${diffInHours} hr ago`;
+    } else if (diffInDays === 1) {
+      return 'Yesterday';
+    } else if (diffInDays < 7) {
+      return `${diffInDays} days ago`;
+    } else if (diffInDays < 30) {
+      const weeks = Math.floor(diffInDays / 7);
+      return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
+    } else {
+      return timestamp.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: diffInDays > 365 ? 'numeric' : undefined
+      });
+    }
+  };
+
+  const markAlertAsRead = (alertId) => {
+    setAlerts(prevAlerts =>
+      prevAlerts.map(alert =>
+        alert.id === alertId ? { ...alert, read: true } : alert
+      )
+    );
+    setAlertCount(prev => Math.max(0, prev - 1));
+  };
+
+  const markAllAlertsAsRead = () => {
+    setAlerts(prevAlerts =>
+      prevAlerts.map(alert => ({ ...alert, read: true }))
+    );
+    setAlertCount(0);
+  };
+
+  const getAlertIcon = (type) => {
+    switch (type) {
+      case 'weather': return <CloudRain className="w-4 h-4" />;
+      case 'disaster': return <AlertTriangle className="w-4 h-4" />;
+      case 'cyclone': return <Wind className="w-4 h-4" />;
+      default: return <Bell className="w-4 h-4" />;
+    }
+  };
+
+  const getSeverityColor = (severity) => {
+    switch (severity) {
+      case 'high': return 'bg-red-500';
+      case 'medium': return 'bg-orange-500';
+      case 'low': return 'bg-yellow-500';
+      default: return 'bg-blue-500';
+    }
+  };
+
+  const getSeverityText = (severity) => {
+    switch (severity) {
+      case 'high': return 'High Alert';
+      case 'medium': return 'Medium Alert';
+      case 'low': return 'Low Alert';
+      default: return 'Information';
+    }
+  };
+
+  const getDataSourceBadge = (dataSource) => {
+    switch (dataSource) {
+      case 'imd':
+        return { text: 'IMD', color: 'bg-blue-500/20 text-blue-300' };
+      case 'ksndmc':
+        return { text: 'KSNDMC', color: 'bg-green-500/20 text-green-300' };
+      case 'usgs':
+        return { text: 'USGS', color: 'bg-orange-500/20 text-orange-300' };
+      default:
+        return { text: 'System', color: 'bg-purple-500/20 text-purple-300' };
+    }
+  };
+
+  useEffect(() => {
+    // Fetch alerts when location changes
+    if (location) {
+      fetchGovernmentAlerts(location.name);
+    } else {
+      fetchGovernmentAlerts();
+    }
+  }, [location]);
 
   const fetchSearchEngineStats = async () => {
     try {
@@ -157,186 +437,6 @@ const WeatherWise = () => {
       mapInstanceRef.current.fitBounds(group.getBounds().pad(0.1));
     }
   };
-
-  const fetchGovernmentAlerts = async (locationName = '') => {
-    setLoadingAlerts(true);
-    try {
-      // Mock government alert data - Replace with real API endpoints
-      const mockAlerts = generateMockAlerts(locationName);
-
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      setAlerts(mockAlerts);
-      setAlertCount(mockAlerts.filter(alert => !alert.read).length);
-    } catch (error) {
-      console.error('Error fetching alerts:', error);
-      setAlerts([]);
-    } finally {
-      setLoadingAlerts(false);
-    }
-  };
-
-  const generateMockAlerts = (locationName = '') => {
-    const currentDate = new Date();
-    const alerts = [];
-
-    // Kerala specific alerts
-    if (locationName && locationName.toLowerCase().includes('kerala')) {
-      alerts.push({
-        id: 1,
-        type: 'weather',
-        severity: 'high',
-        title: 'Heavy Rainfall Warning',
-        message: 'India Meteorological Department issues heavy rainfall alert for Kerala districts. Expected rainfall: 200-300mm in next 24 hours.',
-        location: 'Kerala',
-        source: 'IMD Kerala',
-        timestamp: new Date(currentDate.getTime() - 30 * 60000), // 30 minutes ago
-        read: false,
-        official: true
-      });
-
-      alerts.push({
-        id: 2,
-        type: 'disaster',
-        severity: 'medium',
-        title: 'Landslide Alert',
-        message: 'KSNDMC alerts for possible landslides in hilly areas of Idukki and Wayanad districts.',
-        location: 'Kerala - Idukki, Wayanad',
-        source: 'KSNDMC',
-        timestamp: new Date(currentDate.getTime() - 2 * 60 * 60000), // 2 hours ago
-        read: false,
-        official: true
-      });
-    }
-
-    // General India alerts
-    alerts.push({
-      id: 3,
-      type: 'cyclone',
-      severity: 'high',
-      title: 'Cyclone Watch',
-      message: 'Cyclonic circulation observed over Bay of Bengal. Coastal areas advised to stay alert.',
-      location: 'East Coast India',
-      source: 'IMD',
-      timestamp: new Date(currentDate.getTime() - 4 * 60 * 60000), // 4 hours ago
-      read: false,
-      official: true
-    });
-
-    // Location-specific alerts
-    if (locationName) {
-      alerts.push({
-        id: 4,
-        type: 'weather',
-        severity: 'medium',
-        title: 'Temperature Alert',
-        message: `High temperature expected in ${locationName}. Stay hydrated and avoid direct sunlight during peak hours.`,
-        location: locationName,
-        source: 'WeatherWise Pro',
-        timestamp: new Date(currentDate.getTime() - 1 * 60 * 60000), // 1 hour ago
-        read: false,
-        official: false
-      });
-    }
-
-    // Add some read alerts for demonstration
-    alerts.push({
-      id: 5,
-      type: 'info',
-      severity: 'low',
-      title: 'Monsoon Update',
-      message: 'Southwest monsoon advancing normally across Kerala coast.',
-      location: 'Kerala Coast',
-      source: 'IMD',
-      timestamp: new Date(currentDate.getTime() - 24 * 60 * 60000), // 24 hours ago
-      read: true,
-      official: true
-    });
-
-    return alerts;
-  };
-
-  const getRelativeTime = (timestamp) => {
-    const now = new Date();
-    const diffInSeconds = Math.floor((now - timestamp) / 1000);
-    const diffInMinutes = Math.floor(diffInSeconds / 60);
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    const diffInDays = Math.floor(diffInHours / 24);
-
-    if (diffInSeconds < 60) {
-      return 'Just now';
-    } else if (diffInMinutes < 60) {
-      return `${diffInMinutes} min ago`;
-    } else if (diffInHours < 24) {
-      return `${diffInHours} hr ago`;
-    } else if (diffInDays === 1) {
-      return 'Yesterday';
-    } else if (diffInDays < 7) {
-      return `${diffInDays} days ago`;
-    } else if (diffInDays < 30) {
-      const weeks = Math.floor(diffInDays / 7);
-      return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
-    } else {
-      return timestamp.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: diffInDays > 365 ? 'numeric' : undefined
-      });
-    }
-  };
-
-  const markAlertAsRead = (alertId) => {
-    setAlerts(prevAlerts =>
-      prevAlerts.map(alert =>
-        alert.id === alertId ? { ...alert, read: true } : alert
-      )
-    );
-    setAlertCount(prev => Math.max(0, prev - 1));
-  };
-
-  const markAllAlertsAsRead = () => {
-    setAlerts(prevAlerts =>
-      prevAlerts.map(alert => ({ ...alert, read: true }))
-    );
-    setAlertCount(0);
-  };
-
-  const getAlertIcon = (type) => {
-    switch (type) {
-      case 'weather': return <CloudRain className="w-4 h-4" />;
-      case 'disaster': return <AlertTriangle className="w-4 h-4" />;
-      case 'cyclone': return <Wind className="w-4 h-4" />;
-      default: return <Bell className="w-4 h-4" />;
-    }
-  };
-
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 'high': return 'bg-red-500';
-      case 'medium': return 'bg-orange-500';
-      case 'low': return 'bg-yellow-500';
-      default: return 'bg-blue-500';
-    }
-  };
-
-  const getSeverityText = (severity) => {
-    switch (severity) {
-      case 'high': return 'High Alert';
-      case 'medium': return 'Medium Alert';
-      case 'low': return 'Low Alert';
-      default: return 'Information';
-    }
-  };
-
-  useEffect(() => {
-    // Fetch alerts when location changes
-    if (location) {
-      fetchGovernmentAlerts(location.name);
-    } else {
-      fetchGovernmentAlerts();
-    }
-  }, [location]);
 
   // Update your searchLocations function in React
   const searchLocations = async (query) => {
@@ -605,27 +705,6 @@ const WeatherWise = () => {
     return csv;
   };
 
-  const exportToKML = (data) => {
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name>WeatherWise Pro - ${data.metadata.location}</name>
-    <description>Weather analysis for ${data.metadata.location}</description>
-    <Placemark>
-      <name>${data.metadata.location}</name>
-      <description>
-        Temperature: ${data.raw_data.temperature}°F
-        Wind: ${data.raw_data.windSpeed} mph
-        Precipitation: ${data.raw_data.precipitation}"
-        Risk Score: ${data.probabilities.risk_scores.overall}/10
-      </description>
-      <Point>
-        <coordinates>${data.metadata.coordinates.lon},${data.metadata.coordinates.lat},0</coordinates>
-      </Point>
-    </Placemark>
-  </Document>
-</kml>`;
-  };
 
   const handleAdvancedExport = () => {
     const exportData = generateExportData();
@@ -1080,7 +1159,7 @@ ${aiAdvice}`;
       <div className={`relative z-10 transition-all duration-1000 ${animateIn ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
 
         {/* Enhanced Header */}
-        <header className="relative border-b border-white/10 backdrop-blur-ultra">
+        <header className="relative border-b border-white/10 backdrop-blur-ultra z-50">
           <div className="absolute inset-0 bg-gradient-to-b from-black/90 to-transparent"></div>
           <div className="relative max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
@@ -1103,122 +1182,145 @@ ${aiAdvice}`;
               </div>
 
               <div className="flex items-center gap-4">
-                {showAlerts && (
-                  <div className="absolute top-full right-0 mt-2 w-96 bg-black/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                    <div className="p-4 border-b border-white/10">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-bold flex items-center gap-2">
-                          <AlertTriangle className="w-5 h-5 text-orange-400" />
-                          Real-Time Alerts
-                          <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded-full">
-                            Live
-                          </span>
-                        </h3>
-                        <div className="flex items-center gap-2">
-                          {alertCount > 0 && (
-                            <button
-                              onClick={markAllAlertsAsRead}
-                              className="text-xs text-gray-400 hover:text-white transition-colors"
-                            >
-                              Mark all read
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setShowAlerts(false)}
-                            className="text-gray-400 hover:text-white transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Real-time monitoring for {location ? location.name : 'your region'}
-                      </p>
-                    </div>
-
-                    <div className="max-h-96 overflow-y-auto">
-                      {loadingAlerts ? (
-                        <div className="flex items-center justify-center py-8">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
-                          <span className="ml-2 text-gray-400">Loading live alerts...</span>
-                        </div>
-                      ) : alerts.length === 0 ? (
-                        <div className="text-center py-8 text-gray-400">
-                          <Bell className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                          <p>No active alerts</p>
-                          <p className="text-sm mt-1">All systems normal</p>
-                        </div>
-                      ) : (
-                        <div className="divide-y divide-white/10">
-                          {alerts.map((alert) => {
-                            const dataSourceBadge = getDataSourceBadge(alert.dataSource);
-                            return (
-                              <div
-                                key={alert.id}
-                                className={`p-4 hover:bg-white/5 transition-colors cursor-pointer ${!alert.read ? 'bg-orange-500/10' : ''
-                                  }`}
-                                onClick={() => markAlertAsRead(alert.id)}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div className={`w-2 h-2 mt-2 rounded-full ${getSeverityColor(alert.severity)}`}></div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                      {getAlertIcon(alert.type)}
-                                      <span className={`text-xs font-semibold px-2 py-1 rounded-full ${alert.severity === 'high' ? 'bg-red-500/20 text-red-300' :
-                                          alert.severity === 'medium' ? 'bg-orange-500/20 text-orange-300' :
-                                            'bg-yellow-500/20 text-yellow-300'
-                                        }`}>
-                                        {getSeverityText(alert.severity)}
-                                      </span> <div className="w-px h-4 bg-white/20"></div>
-                                      {alert.official && (
-                                        <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded-full">
-                                          Official
-                                        </span>
-                                      )}
-                                      <span className={`text-xs ${dataSourceBadge.color} px-2 py-1 rounded-full`}>
-                                        {dataSourceBadge.text}
-                                      </span>
-                                    </div>
-                                    <h4 className="font-semibold text-sm mb-1">{alert.title}</h4>
-                                    <p className="text-sm text-gray-300 mb-2">{alert.message}</p>
-                                    <div className="flex items-center justify-between text-xs text-gray-400">
-                                      <div className="flex items-center gap-4">
-                                        <span>{alert.location}</span>
-                                        <span>Source: {alert.source}</span>
-                                      </div>
-                                      <span className="text-orange-300">
-                                        Updated {getRelativeTime(alert.timestamp)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  {!alert.read && (
-                                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0 mt-2"></div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                {/* Alert Button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowAlerts(!showAlerts)}
+                    className="relative group btn-glow"
+                  >
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl blur-lg opacity-50 group-hover:opacity-75 transition-opacity"></div>
+                    <div className="relative bg-gradient-to-r from-orange-500 to-red-500 px-4 py-2 rounded-xl font-semibold flex items-center gap-2 shadow-lg">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>Alerts</span>
+                      {alertCount > 0 && (
+                        <span className="bg-white text-red-600 text-xs px-2 py-1 rounded-full font-bold min-w-5">
+                          {alertCount}
+                        </span>
                       )}
                     </div>
+                  </button>
 
-                    <div className="p-3 border-t border-white/10 bg-black/50">
-                      <div className="flex items-center justify-between text-xs text-gray-400">
-                        <span>Data sources: IMD, USGS, OpenWeatherMap, KSNDMC</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-green-400">●</span>ewfkfb
-                          <span>Auto-refresh: 5 min</span>
-                          <button
-                            onClick={() => fetchGovernmentAlerts(location?.name)}
-                            className="text-orange-400 hover:text-orange-300 transition-colors ml-2"
-                          >
-                            Refresh Now
-                          </button>
+                  {/* Alert Dropdown - Enhanced with Real-time Data */}
+                  {showAlerts && (
+                    <div className="fixed top-20 right-6 w-96 bg-black/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl z-[100] overflow-hidden">
+                      <div className="p-4 border-b border-white/10">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-lg font-bold flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-orange-400" />
+                            Real-Time Alerts
+                            <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded-full">
+                              Live
+                            </span>
+                          </h3>
+                          <div className="flex items-center gap-2">
+                            {alertCount > 0 && (
+                              <button
+                                onClick={markAllAlertsAsRead}
+                                className="text-xs text-gray-400 hover:text-white transition-colors"
+                              >
+                                Mark all read
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setShowAlerts(false)}
+                              className="text-gray-400 hover:text-white transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Real-time monitoring for {location ? location.name : 'your region'}
+                        </p>
+                      </div>
+
+                      <div className="max-h-96 overflow-y-auto">
+                        {loadingAlerts ? (
+                          <div className="flex items-center justify-center py-8">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
+                            <span className="ml-2 text-gray-400">Loading live alerts...</span>
+                          </div>
+                        ) : alerts.length === 0 ? (
+                          <div className="text-center py-8 text-gray-400">
+                            <Bell className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                            <p>No active alerts</p>
+                            <p className="text-sm mt-1">All systems normal</p>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-white/10">
+                            {alerts.map((alert) => {
+                              const dataSourceBadge = getDataSourceBadge(alert.dataSource);
+                              return (
+                                <div
+                                  key={alert.id}
+                                  className={`p-4 hover:bg-white/5 transition-colors cursor-pointer ${!alert.read ? 'bg-orange-500/10' : ''
+                                    }`}
+                                  onClick={() => markAlertAsRead(alert.id)}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className={`w-2 h-2 mt-2 rounded-full ${getSeverityColor(alert.severity)}`}></div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                        {getAlertIcon(alert.type)}
+                                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${alert.severity === 'high' ? 'bg-red-500/20 text-red-300' :
+                                          alert.severity === 'medium' ? 'bg-orange-500/20 text-orange-300' :
+                                            'bg-yellow-500/20 text-yellow-300'
+                                          }`}>
+                                          {getSeverityText(alert.severity)}
+                                        </span>
+                                        <div className="w-px h-4 bg-white/20"></div>
+                                        {alert.official && (
+                                          <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded-full">
+                                            Official
+                                          </span>
+                                        )}
+                                        <span className={`text-xs ${dataSourceBadge.color} px-2 py-1 rounded-full`}>
+                                          {dataSourceBadge.text}
+                                        </span>
+                                      </div>
+                                      <h4 className="font-semibold text-sm mb-1">{alert.title}</h4>
+                                      <p className="text-sm text-gray-300 mb-2">{alert.message}</p>
+                                      <div className="flex items-center justify-between text-xs text-gray-400">
+                                        <div className="flex items-center gap-4">
+                                          <span>{alert.location}</span>
+                                          <span>Source: {alert.source}</span>
+                                        </div>
+                                        <span className="text-orange-300">
+                                          Updated {getRelativeTime(alert.timestamp)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    {!alert.read && (
+                                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0 mt-2"></div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="p-3 border-t border-white/10 bg-black/50">
+                        <div className="flex items-center justify-between text-xs text-gray-400">
+                          <span>Data sources: IMD, USGS, OpenWeatherMap, KSNDMC</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-green-400">●</span>
+                            <span>Auto-refresh: 5 min</span>
+                            <button
+                              onClick={() => fetchGovernmentAlerts(location?.name)}
+                              className="text-orange-400 hover:text-orange-300 transition-colors ml-2"
+                            >
+                              Refresh Now
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+
                 <div className="hidden md:flex items-center gap-2 px-4 py-2 glass rounded-xl border border-white/10">
                   <Database className="w-4 h-4 text-blue-400" />
                   <span className="text-sm text-gray-300">NASA Data</span>
@@ -1249,8 +1351,8 @@ ${aiAdvice}`;
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-1 flex items-center justify-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all duration-300 ${activeTab === tab.id
-                      ? 'tab-active shadow-lg'
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    ? 'tab-active shadow-lg'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }`}
                 >
                   <tab.icon className="w-5 h-5" />
@@ -1366,8 +1468,8 @@ ${aiAdvice}`;
                             key={act.id}
                             onClick={() => setActivity(act.id)}
                             className={`relative group overflow-hidden rounded-xl p-4 transition-all duration-300 interactive-card ${activity === act.id
-                                ? 'ring-2 ring-white scale-105 shadow-lg'
-                                : 'hover:scale-105'
+                              ? 'ring-2 ring-white scale-105 shadow-lg'
+                              : 'hover:scale-105'
                               }`}
                           >
                             <div className={`absolute inset-0 bg-gradient-to-br ${act.gradient} opacity-20 rounded-xl`}></div>
