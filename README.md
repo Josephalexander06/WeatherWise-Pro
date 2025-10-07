@@ -75,7 +75,9 @@ python -m venv env
 env\Scripts\activate     # Windows
 source env/bin/activate  # macOS/Linux
 pip install -r requirements.txt
-python app.py
+python main.py
+
+
 
 🌍 Real-World Impact
 Use Case	Description
