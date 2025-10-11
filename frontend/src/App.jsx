@@ -361,7 +361,7 @@ const WeatherWise = () => {
 
   const fetchSearchEngineStats = async () => {
     try {
-      const response = await fetch('https://my-backend.onrender.com/api/search/stats');
+      const response = await fetch('https://weatherwise-pro.onrender.com/api/search/stats');
       if (response.ok) {
         const data = await response.json();
         setSearchEngineStats(data);
@@ -453,7 +453,7 @@ const WeatherWise = () => {
 
       console.log('Sending location search request:', requestBody);
 
-      const response = await fetch('https://my-backend.onrender.com/api/location/search', {
+      const response = await fetch('https://weatherwise-pro.onrender.com/api/location/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -497,7 +497,7 @@ const WeatherWise = () => {
 
       console.log('Sending places search request:', requestData);
 
-      const response = await fetch('https://my-backend.onrender.com/api/places/search', {
+      const response = await fetch('https://weatherwise-pro.onrender.com/api/places/search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -516,7 +516,7 @@ const WeatherWise = () => {
         console.error('Validation error details:', errorData);
 
         // Try the debug endpoint
-        await fetch('https://my-backend.onrender.com/api/debug/request-format', {
+        await fetch('https://weatherwise-pro.onrender.com/api/debug/request-format', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestData)
