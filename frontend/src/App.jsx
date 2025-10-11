@@ -1571,8 +1571,7 @@ ${aiAdvice}`;
                         Activity Map
                       </label>
                     </div>
-
-                   {location && (
+                    {location && (
                       <div className="space-y-4">
                         <div
                           ref={mapRef}
