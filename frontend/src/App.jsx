@@ -67,12 +67,11 @@ const WeatherWise = () => {
     setTimeout(() => setAnimateIn(true), 100);
   }, []);
 
-  useEffect(() => {
-    if (location && mapRef.current) {
-      setShowMap(true);
-      initializeMap();
-    }
-  }, [location]);
+useEffect(() => {
+  if (location && mapRef.current) {
+    initializeMap();
+  }
+}, [location]);
 
   useEffect(() => {
     if (mapInstanceRef.current && activityPlaces.length > 0) {
@@ -1571,16 +1570,9 @@ ${aiAdvice}`;
                         <Map className="w-4 h-4" />
                         Activity Map
                       </label>
-                      <button
-                        onClick={() => setShowMap(!showMap)}
-                        className="btn-secondary flex items-center gap-2 px-3 py-2 text-sm"
-                      >
-                        <Map className="w-4 h-4" />
-                        {showMap ? 'Hide Map' : 'Show Map'}
-                      </button>
                     </div>
 
-                    {showMap && location && (
+                   {location && (
                       <div className="space-y-4">
                         <div
                           ref={mapRef}
